@@ -67,6 +67,7 @@
     <Compile Include="ApiObject.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RestClient.cs" />
+    <Compile Include="RestExtensions.cs" />
     <None Include="Properties\ControlSystem.cfg" />
   </ItemGroup>
   <ItemGroup>

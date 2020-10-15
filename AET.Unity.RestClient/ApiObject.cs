@@ -8,7 +8,7 @@ namespace AET.Unity.RestClient {
 
   public abstract class ApiObject {
     private readonly string setUrl, getUrl;
-    private JObject lastSent = null;
+    protected JObject lastSent = null;
 
     protected ApiObject(string setUrl, string getUrl) {
       Json = new JObject();
@@ -30,11 +30,17 @@ namespace AET.Unity.RestClient {
 
     #region Json Object Helpers
     protected int GetInt(string key) {
-      return (int)((long?)Json[key] ?? 0);
+      JToken value;
+      if (!Json.TryGetValue(key, out value)) return 0;
+      if (value == null) return 0;
+      return value.Value<int>();
     }
 
     protected bool GetBool(string key) {
-      return (bool)(Json[key] ?? false);
+      JToken value;
+      if (!Json.TryGetValue(key, out value)) return false;
+      if (value == null) return false;
+      return value.Value<bool>();
     }
 
     protected double GetDouble(string key) {
@@ -73,11 +79,12 @@ namespace AET.Unity.RestClient {
       }
     }
 
-    protected void Deserialize(string json) {
+    protected JObject Deserialize(string json) {
       try {
-        Json = JObject.Parse(json);
+        return JObject.Parse(json);
       } catch (Exception ex) {
         ErrorMessage.Error("AET.Unity.RestClient: Unable to deserialize: ({0})\r\n{1}", ex.Message, json);
+        return null;
       }
     }
 
@@ -99,8 +106,12 @@ namespace AET.Unity.RestClient {
     }
     #endregion
 
-    public void Send() {
+    public virtual void Send() {
       if (RequiredFieldsAreValid()) RestClient.HttpPostOptimized(this);
+    }
+
+    public void SendAll() {
+      if (RequiredFieldsAreValid()) RestClient.HttpPost(this);
     }
 
     public abstract bool RequiredFieldsAreValid();
@@ -112,35 +123,55 @@ namespace AET.Unity.RestClient {
     }
     protected void FillJson(Action callback) {
       try {
-        RestClient.HttpGet(GetUrl, (response) => {
-          Deserialize(response);
-          if (callback != null) callback();
-          lastSent = JObject.FromObject(Json);
-        });
+        var response = RestClient.HttpGet(GetUrl);        
+        var json = Deserialize(response);
+        if (json == null) return;
+        Json = json;
+        if (callback != null) callback();
+        lastSent = JObject.FromObject(Json);        
       }
       catch (Exception ex) {
-        ErrorMessage.Error("Unity.RestClient.FillJson(): {1}", ex.Message);
+        ErrorMessage.Error("Unity.RestClient.FillJson(): {0}", ex.Message);
       }
     }
-    
 
-    protected void FillJson(string jsonPath) {
-      FillJson(jsonPath, null);
+    protected JObject GetJObject() {
+      try {
+        var response = RestClient.HttpGet(GetUrl);
+        var json = Deserialize(response);
+        if (json == null) return null ;
+        return json;
+      } catch (Exception ex) {
+        ErrorMessage.Error("Unity.RestClient.GetJObject(): {0}", ex.Message);
+        return null;
+      }      
     }
 
-    protected void FillJson(string jsonPath, Action callback) {
+    protected void FillJson(string jsonPath) {
       try {
-        RestClient.HttpGet(GetUrl, (responseString) => {
-          var j = JObject.Parse(responseString);
-          Json = j[jsonPath] as JObject;
-          if (callback != null) callback();
-          lastSent = JObject.FromObject(Json);
-        });
+        var responseString = RestClient.HttpGet(GetUrl);
+        var j = JObject.Parse(responseString);
+        Json = j[jsonPath] as JObject;
+        lastSent = JObject.FromObject(Json);
       }
       catch (Exception ex) {
         ErrorMessage.Error("Unity.RestClient.FillJson({0}): {1}", jsonPath, ex.Message);
       }
     }
+
+    protected void FillJsonFromPost(string postContents, Action callback) {
+      try {
+        var response = RestClient.HttpPost(GetUrl, postContents);
+        var json = Deserialize(response);
+        if (json == null) return;
+        Json = json;
+        lastSent = JObject.FromObject(Json);
+      } catch (Exception ex) {
+        ErrorMessage.Error("Unity.RestClient.FillJson(): {0}", ex.Message);
+      }
+    }
+    
+
 
 
     #region Helper Methods
@@ -156,12 +187,12 @@ namespace AET.Unity.RestClient {
       return (ushort)((value * scale) / 65535);
     }
 
-    protected bool FalseWithErrorMessage(string message) {
+    public static bool FalseWithErrorMessage(string message) {
       ErrorMessage.Error(message);
       return false;
     }
 
-    protected bool FalseWithErrorMessage(string message, params object[] args) {
+    public static bool FalseWithErrorMessage(string message, params object[] args) {
       ErrorMessage.Error(message, args);
       return false;
     }
@@ -175,13 +206,13 @@ namespace AET.Unity.RestClient {
     protected bool ValueIsValid<T>(T value, string name, T[] allowedValues) {
       if (value == null) return true;
       if (allowedValues.Contains(value)) return true;
-      return FalseWithErrorMessage("SW41PlusV3.AudioSettings: {0} must be {1}.", name, allowedValues.FormatAsList());
+      return FalseWithErrorMessage("{0} must be {1}.", name, allowedValues.FormatAsList());
     }
 
     protected bool ValueIsValid(ushort? value, string name, ushort minValue, ushort maxValue) {
       if (value == null) return true;
       if (value >= minValue && value <= maxValue) return true;
-      return FalseWithErrorMessage("SW41PlusV3.AudioSettings: {0} must be {1} to {2}.", name, minValue, maxValue);
+      return FalseWithErrorMessage("{0} must be {1} to {2}.", name, minValue, maxValue);
     }
 
     #endregion

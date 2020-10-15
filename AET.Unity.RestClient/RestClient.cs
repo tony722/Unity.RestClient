@@ -3,11 +3,16 @@ using AET.Unity.SimplSharp;
 using AET.Unity.SimplSharp.HttpClient;
 using AET.Unity.SimplSharp.Timer;
 using Crestron.SimplSharp;
+using Crestron.SimplSharp.Ssh;
 
 namespace AET.Unity.RestClient {
   public class RestClient {
     public RestClient() {
-      HttpClient = new CrestronHttpClient();
+      HttpClient = new CrestronHttpClient(5);
+    }
+
+    public RestClient(IHttpClient httpClient) {
+      HttpClient = httpClient;
     }
 
     #region Properties for Test Double injection
@@ -23,21 +28,26 @@ namespace AET.Unity.RestClient {
       }
     }
 
-    internal void HttpPost(ApiObject command) {
-      HttpClient.Post(BuildFullUrl(command.SetUrl), command.GetJson());
+    public string HttpPost(ApiObject command) {
+      return HttpClient.Post(BuildFullUrl(command.SetUrl), command.GetJson());
     }
 
-    internal void HttpPostOptimized(ApiObject command) {
+    public void HttpPostOptimized(ApiObject command) {
       var json = command.GetOptimizedJson();
       if (json.IsNullOrWhiteSpace()) {
         if(HttpClient.Debug == 1) CrestronConsole.PrintLine("Unity.RestClient.HttpPostOptimized({0}) OptimizedJson == null.", command.GetUrl);
         return;
       }
-      HttpClient.PostAsync(BuildFullUrl(command.SetUrl), json);
+      HttpClient.Post(BuildFullUrl(command.SetUrl), json);
     }
 
-    internal void HttpGet(string getUrl, Action<string> callbackAction) {
-      HttpClient.GetAsync(BuildFullUrl(getUrl), callbackAction);
+    public string HttpPost(string path, string contents) {
+      var url = BuildFullUrl(path);
+      return HttpClient.Post(url, contents);
+    }
+
+    public string HttpGet(string url) {
+      return HttpClient.Get(BuildFullUrl(url));
     }
 
     internal string BuildFullUrl(string url) {
